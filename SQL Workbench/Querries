@@ -1,0 +1,2792 @@
+-- Create Database
+CREATE DATABASE IF NOT EXISTS smart_city_traffic_dw;
+
+USE smart_city_traffic_dw;
+
+-- ============================================================
+-- 1. DIM_DATE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Dim_Date (
+    Date_Key INT PRIMARY KEY,
+    Full_Date DATE NOT NULL,
+    Day INT NOT NULL,
+    Day_Name VARCHAR(20) NOT NULL,
+    Week INT NOT NULL,
+    Month INT NOT NULL,
+    Month_Name VARCHAR(20) NOT NULL,
+    Quarter INT NOT NULL,
+    Year INT NOT NULL,
+    Is_Weekend BOOLEAN NOT NULL
+);
+
+-- ============================================================
+-- 2. DIM_TIME
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Dim_Time (
+    Time_Key INT PRIMARY KEY,
+    Time TIME NOT NULL,
+    Hour INT NOT NULL,
+    Hour_Label VARCHAR(10) NOT NULL,
+    Time_Period VARCHAR(20) NOT NULL,
+    Peak_Hour VARCHAR(20) NOT NULL
+);
+
+-- ============================================================
+-- 3. DIM_WEATHER
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Dim_Weather (
+    Weather_Key INT PRIMARY KEY,
+    Weather_Condition VARCHAR(30) NOT NULL UNIQUE
+);
+
+-- ============================================================
+-- 4. DIM_ROAD_CONDITION
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Dim_Road_Condition (
+    Road_Condition_Key INT PRIMARY KEY,
+    Road_Condition VARCHAR(50) NOT NULL UNIQUE
+);
+
+-- ============================================================
+-- 5. DIM_VEHICLE_TYPE
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Dim_Vehicle_Type (
+    Vehicle_Type_Key INT PRIMARY KEY,
+    Vehicle_Type VARCHAR(30) NOT NULL UNIQUE
+);
+
+-- ============================================================
+-- 6. FACT_TRAFFIC
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Fact_Traffic (
+    Traffic_Key INT PRIMARY KEY,
+    Date_Key INT NOT NULL,
+    Time_Key INT NOT NULL,
+    Sensor_ID VARCHAR(50) NOT NULL,
+    Location VARCHAR(50) NOT NULL,
+    Vehicle_Count INT NOT NULL,
+    Average_Speed DECIMAL(10,2) NOT NULL,
+    Congestion_Level VARCHAR(20) NOT NULL,
+    Congestion_Index DECIMAL(10,4) NOT NULL,
+    Congestion_Category VARCHAR(20) NOT NULL,
+    Date_Time DATETIME NOT NULL,
+
+    CONSTRAINT FK_Traffic_Date
+        FOREIGN KEY (Date_Key)
+        REFERENCES Dim_Date(Date_Key),
+
+    CONSTRAINT FK_Traffic_Time
+        FOREIGN KEY (Time_Key)
+        REFERENCES Dim_Time(Time_Key)
+);
+
+-- ============================================================
+-- 7. FACT_ACCIDENT
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS Fact_Accident (
+    Accident_Key INT PRIMARY KEY,
+    Date_Key INT NOT NULL,
+    Time_Key INT NOT NULL,
+    Accident_ID VARCHAR(50) NOT NULL,
+    Location VARCHAR(50) NOT NULL,
+    Weather_Key INT NOT NULL,
+    Road_Condition_Key INT NOT NULL,
+    Vehicle_Type_Key INT NOT NULL,
+    Accident_Severity VARCHAR(20) NOT NULL,
+    Accident_Severity_Score INT NOT NULL,
+    Number_of_Vehicles INT NOT NULL,
+    Casualties INT NOT NULL,
+    Traffic_Density VARCHAR(20) NOT NULL,
+    Date_Time DATETIME NOT NULL,
+
+    CONSTRAINT FK_Accident_Date
+        FOREIGN KEY (Date_Key)
+        REFERENCES Dim_Date(Date_Key),
+
+    CONSTRAINT FK_Accident_Time
+        FOREIGN KEY (Time_Key)
+        REFERENCES Dim_Time(Time_Key),
+
+    CONSTRAINT FK_Accident_Weather
+        FOREIGN KEY (Weather_Key)
+        REFERENCES Dim_Weather(Weather_Key),
+
+    CONSTRAINT FK_Accident_Road
+        FOREIGN KEY (Road_Condition_Key)
+        REFERENCES Dim_Road_Condition(Road_Condition_Key),
+
+    CONSTRAINT FK_Accident_Vehicle
+        FOREIGN KEY (Vehicle_Type_Key)
+        REFERENCES Dim_Vehicle_Type(Vehicle_Type_Key)
+);
+
+-- ============================================================
+-- VERIFY TABLES
+-- ============================================================
+
+SHOW TABLES;dim_date
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT 
+    COUNT(*) AS Row_Count,
+    MIN(Full_Date) AS Start_Date,
+    MAX(Full_Date) AS End_Date,
+    SUM(Is_Weekend) AS Weekend_Days
+FROM Dim_Date;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    COUNT(*) AS Total_Rows,
+    COUNT(DISTINCT Traffic_Key) AS Unique_Traffic_Keys,
+    COUNT(DISTINCT Sensor_ID) AS Unique_Sensors,
+    COUNT(DISTINCT Location) AS Locations,
+    SUM(CASE WHEN Date_Key IS NULL THEN 1 ELSE 0 END) AS Missing_Date_Keys,
+    SUM(CASE WHEN Time_Key IS NULL THEN 1 ELSE 0 END) AS Missing_Time_Keys,
+    MIN(Vehicle_Count) AS Min_Vehicle_Count,
+    MAX(Vehicle_Count) AS Max_Vehicle_Count,
+    ROUND(AVG(Average_Speed), 2) AS Avg_Speed
+FROM Fact_Traffic;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    COUNT(*) AS Total_Rows,
+    COUNT(DISTINCT Accident_Key) AS Unique_Accident_Keys,
+    COUNT(DISTINCT Accident_ID) AS Unique_Accident_IDs,
+    COUNT(DISTINCT Location) AS Locations,
+    COUNT(DISTINCT Weather_Key) AS Weather_Types,
+    COUNT(DISTINCT Road_Condition_Key) AS Road_Conditions,
+    COUNT(DISTINCT Vehicle_Type_Key) AS Vehicle_Types
+FROM Fact_Accident;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    'Fact_Traffic → Dim_Date' AS Relationship,
+    COUNT(*) AS Invalid_Records
+FROM Fact_Traffic ft
+LEFT JOIN Dim_Date dd ON ft.Date_Key = dd.Date_Key
+WHERE dd.Date_Key IS NULL
+
+UNION ALL
+
+SELECT
+    'Fact_Traffic → Dim_Time',
+    COUNT(*)
+FROM Fact_Traffic ft
+LEFT JOIN Dim_Time dt ON ft.Time_Key = dt.Time_Key
+WHERE dt.Time_Key IS NULL
+
+UNION ALL
+
+SELECT
+    'Fact_Accident → Dim_Date',
+    COUNT(*)
+FROM Fact_Accident fa
+LEFT JOIN Dim_Date dd ON fa.Date_Key = dd.Date_Key
+WHERE dd.Date_Key IS NULL
+
+UNION ALL
+
+SELECT
+    'Fact_Accident → Dim_Time',
+    COUNT(*)
+FROM Fact_Accident fa
+LEFT JOIN Dim_Time dt ON fa.Time_Key = dt.Time_Key
+WHERE dt.Time_Key IS NULL
+
+UNION ALL
+
+SELECT
+    'Fact_Accident → Dim_Weather',
+    COUNT(*)
+FROM Fact_Accident fa
+LEFT JOIN Dim_Weather dw ON fa.Weather_Key = dw.Weather_Key
+WHERE dw.Weather_Key IS NULL
+
+UNION ALL
+
+SELECT
+    'Fact_Accident → Dim_Road_Condition',
+    COUNT(*)
+FROM Fact_Accident fa
+LEFT JOIN Dim_Road_Condition dr
+    ON fa.Road_Condition_Key = dr.Road_Condition_Key
+WHERE dr.Road_Condition_Key IS NULL
+
+UNION ALL
+
+SELECT
+    'Fact_Accident → Dim_Vehicle_Type',
+    COUNT(*)
+FROM Fact_Accident fa
+LEFT JOIN Dim_Vehicle_Type dv
+    ON fa.Vehicle_Type_Key = dv.Vehicle_Type_Key
+WHERE dv.Vehicle_Type_Key IS NULL;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    COUNT(*) AS Traffic_Observations,
+    SUM(Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE 
+        WHEN Congestion_Level = 'High' THEN 1 
+        ELSE 0 
+    END) AS High_Congestion_Observations
+FROM Fact_Traffic;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    Location,
+    COUNT(*) AS Traffic_Observations,
+    SUM(Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic
+GROUP BY Location
+ORDER BY Total_Vehicles DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dt.Time_Period,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Time dt
+    ON ft.Time_Key = dt.Time_Key
+GROUP BY dt.Time_Period
+ORDER BY
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dt.Peak_Hour,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Time dt
+    ON ft.Time_Key = dt.Time_Key
+GROUP BY dt.Peak_Hour
+ORDER BY
+    CASE dt.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    COUNT(*) AS Total_Accidents,
+    SUM(Casualties) AS Total_Casualties,
+    ROUND(AVG(Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(Number_of_Vehicles), 2) AS Avg_Vehicles_Per_Accident,
+    SUM(CASE
+        WHEN Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    Location,
+    COUNT(*) AS Total_Accidents,
+    SUM(Casualties) AS Total_Casualties,
+    ROUND(AVG(Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident
+GROUP BY Location
+ORDER BY Total_Accidents DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    Accident_Severity,
+    Accident_Severity_Score,
+    COUNT(*) AS Accident_Count,
+    SUM(Casualties) AS Total_Casualties,
+    ROUND(AVG(Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(
+        COUNT(*) * 100.0 / (SELECT COUNT(*) FROM Fact_Accident),
+        2
+    ) AS Accident_Percentage
+FROM Fact_Accident
+GROUP BY
+    Accident_Severity,
+    Accident_Severity_Score
+ORDER BY Accident_Severity_Score;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dw.Weather_Condition,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Weather dw
+    ON fa.Weather_Key = dw.Weather_Key
+GROUP BY dw.Weather_Condition
+ORDER BY Total_Accidents DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dr.Road_Condition,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Road_Condition dr
+    ON fa.Road_Condition_Key = dr.Road_Condition_Key
+GROUP BY dr.Road_Condition
+ORDER BY Total_Accidents DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dv.Vehicle_Type,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Vehicle_Type dv
+    ON fa.Vehicle_Type_Key = dv.Vehicle_Type_Key
+GROUP BY dv.Vehicle_Type
+ORDER BY Total_Accidents DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    Traffic_Density,
+    COUNT(*) AS Total_Accidents,
+    SUM(Casualties) AS Total_Casualties,
+    ROUND(AVG(Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident
+GROUP BY Traffic_Density
+ORDER BY
+    CASE Traffic_Density
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dt.Time_Period,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY dt.Time_Period
+ORDER BY
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dt.Peak_Hour,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY dt.Peak_Hour
+ORDER BY
+    CASE dt.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Full_Date,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Date dd
+    ON fa.Date_Key = dd.Date_Key
+GROUP BY dd.Full_Date
+ORDER BY dd.Full_Date;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Day_Name,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Date dd
+    ON fa.Date_Key = dd.Date_Key
+GROUP BY
+    dd.Day_Name,
+    dd.Week
+ORDER BY
+    dd.Week;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Day_Name,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Date dd
+    ON fa.Date_Key = dd.Date_Key
+GROUP BY dd.Day_Name
+ORDER BY
+    CASE dd.Day_Name
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        WHEN 'Sunday' THEN 7
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    Location,
+    Traffic_Density,
+    COUNT(*) AS Total_Accidents,
+    SUM(Casualties) AS Total_Casualties,
+    ROUND(AVG(Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident
+GROUP BY
+    Location,
+    Traffic_Density
+ORDER BY
+    Location,
+    CASE Traffic_Density
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    dw.Weather_Condition,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Weather dw
+    ON fa.Weather_Key = dw.Weather_Key
+GROUP BY
+    fa.Location,
+    dw.Weather_Condition
+ORDER BY
+    fa.Location,
+    dw.Weather_Condition;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    dt.Time_Period,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    fa.Location,
+    dt.Time_Period
+ORDER BY
+    fa.Location,
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    dr.Road_Condition,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Road_Condition dr
+    ON fa.Road_Condition_Key = dr.Road_Condition_Key
+GROUP BY
+    fa.Location,
+    dr.Road_Condition
+ORDER BY
+    fa.Location,
+    CASE dr.Road_Condition
+        WHEN 'Dry' THEN 1
+        WHEN 'Icy' THEN 2
+        WHEN 'Under Construction' THEN 3
+        WHEN 'Wet' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    dv.Vehicle_Type,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Vehicle_Type dv
+    ON fa.Vehicle_Type_Key = dv.Vehicle_Type_Key
+GROUP BY
+    fa.Location,
+    dv.Vehicle_Type
+ORDER BY
+    fa.Location,
+    dv.Vehicle_Type;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Year,
+    dd.Month,
+    dd.Month_Name,
+    COUNT(*) AS Total_Accidents,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties_Per_Accident,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Date dd
+    ON fa.Date_Key = dd.Date_Key
+GROUP BY
+    dd.Year,
+    dd.Month,
+    dd.Month_Name
+ORDER BY
+    dd.Year,
+    dd.Month;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Year,
+    dd.Month,
+    dd.Month_Name,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Date dd
+    ON ft.Date_Key = dd.Date_Key
+GROUP BY
+    dd.Year,
+    dd.Month,
+    dd.Month_Name
+ORDER BY
+    dd.Year,
+    dd.Month;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Day_Name,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Date dd
+    ON ft.Date_Key = dd.Date_Key
+GROUP BY dd.Day_Name
+ORDER BY
+    CASE dd.Day_Name
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        WHEN 'Sunday' THEN 7
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    ft.Location,
+    dd.Day_Name,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Date dd
+    ON ft.Date_Key = dd.Date_Key
+GROUP BY
+    ft.Location,
+    dd.Day_Name
+ORDER BY
+    ft.Location,
+    CASE dd.Day_Name
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        WHEN 'Sunday' THEN 7
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    ft.Location,
+    dt.Time_Period,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Time dt
+    ON ft.Time_Key = dt.Time_Key
+GROUP BY
+    ft.Location,
+    dt.Time_Period
+ORDER BY
+    ft.Location,
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    ft.Location,
+    dt.Peak_Hour,
+    COUNT(*) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Vehicle_Count), 2) AS Avg_Vehicle_Count,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+    SUM(CASE
+        WHEN ft.Congestion_Level = 'High' THEN 1
+        ELSE 0
+    END) AS High_Congestion_Count
+FROM Fact_Traffic ft
+JOIN Dim_Time dt
+    ON ft.Time_Key = dt.Time_Key
+GROUP BY
+    ft.Location,
+    dt.Peak_Hour
+ORDER BY
+    ft.Location,
+    CASE dt.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    Location,
+    Congestion_Level,
+    COUNT(*) AS Traffic_Observations,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY Location),
+        2
+    ) AS Percentage_Within_Location
+FROM Fact_Traffic
+GROUP BY
+    Location,
+    Congestion_Level
+ORDER BY
+    Location,
+    CASE Congestion_Level
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY fa.Location),
+        2
+    ) AS Percentage_Within_Location,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+GROUP BY
+    fa.Location,
+    fa.Accident_Severity
+ORDER BY
+    fa.Location,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Traffic_Density,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY fa.Traffic_Density),
+        2
+    ) AS Percentage_Within_Density,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+GROUP BY
+    fa.Traffic_Density,
+    fa.Accident_Severity
+ORDER BY
+    CASE fa.Traffic_Density
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dw.Weather_Condition,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dw.Weather_Condition),
+        2
+    ) AS Percentage_Within_Weather,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Weather dw
+    ON fa.Weather_Key = dw.Weather_Key
+GROUP BY
+    dw.Weather_Condition,
+    fa.Accident_Severity
+ORDER BY
+    dw.Weather_Condition,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dr.Road_Condition,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dr.Road_Condition),
+        2
+    ) AS Percentage_Within_Road_Condition,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Road_Condition dr
+    ON fa.Road_Condition_Key = dr.Road_Condition_Key
+GROUP BY
+    dr.Road_Condition,
+    fa.Accident_Severity
+ORDER BY
+    dr.Road_Condition,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dv.Vehicle_Type,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dv.Vehicle_Type),
+        2
+    ) AS Percentage_Within_Vehicle_Type,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Vehicle_Type dv
+    ON fa.Vehicle_Type_Key = dv.Vehicle_Type_Key
+GROUP BY
+    dv.Vehicle_Type,
+    fa.Accident_Severity
+ORDER BY
+    dv.Vehicle_Type,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dt.Time_Period,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dt.Time_Period),
+        2
+    ) AS Percentage_Within_Time_Period,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    dt.Time_Period,
+    fa.Accident_Severity
+ORDER BY
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dt.Peak_Hour,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dt.Peak_Hour),
+        2
+    ) AS Percentage_Within_Peak_Category,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    dt.Peak_Hour,
+    fa.Accident_Severity
+ORDER BY
+    CASE dt.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Month,
+    dd.Month_Name,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dd.Month),
+        2
+    ) AS Percentage_Within_Month,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Date dd
+    ON fa.Date_Key = dd.Date_Key
+GROUP BY
+    dd.Month,
+    dd.Month_Name,
+    fa.Accident_Severity
+ORDER BY
+    dd.Month,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dd.Day_Name,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (PARTITION BY dd.Day_Name),
+        2
+    ) AS Percentage_Within_Day,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score
+FROM Fact_Accident fa
+JOIN Dim_Date dd
+    ON fa.Date_Key = dd.Date_Key
+GROUP BY
+    dd.Day_Name,
+    fa.Accident_Severity
+ORDER BY
+    CASE dd.Day_Name
+        WHEN 'Monday' THEN 1
+        WHEN 'Tuesday' THEN 2
+        WHEN 'Wednesday' THEN 3
+        WHEN 'Thursday' THEN 4
+        WHEN 'Friday' THEN 5
+        WHEN 'Saturday' THEN 6
+        WHEN 'Sunday' THEN 7
+    END,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    dt.Peak_Hour,
+    COUNT(*) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    fa.Location,
+    dt.Peak_Hour
+ORDER BY
+    fa.Location,
+    CASE dt.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    dt.Peak_Hour,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (
+            PARTITION BY fa.Location, dt.Peak_Hour
+        ),
+        2
+    ) AS Percentage_Within_Location_Period,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties
+FROM Fact_Accident fa
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    fa.Location,
+    dt.Peak_Hour,
+    fa.Accident_Severity
+ORDER BY
+    fa.Location,
+    CASE dt.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dw.Weather_Condition,
+    dr.Road_Condition,
+    COUNT(*) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Weather dw
+    ON fa.Weather_Key = dw.Weather_Key
+JOIN Dim_Road_Condition dr
+    ON fa.Road_Condition_Key = dr.Road_Condition_Key
+GROUP BY
+    dw.Weather_Condition,
+    dr.Road_Condition
+ORDER BY
+    Accident_Count DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dw.Weather_Condition,
+    dt.Time_Period,
+    COUNT(*) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Weather dw
+    ON fa.Weather_Key = dw.Weather_Key
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    dw.Weather_Condition,
+    dt.Time_Period
+ORDER BY
+    dw.Weather_Condition,
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dr.Road_Condition,
+    dt.Time_Period,
+    COUNT(*) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Road_Condition dr
+    ON fa.Road_Condition_Key = dr.Road_Condition_Key
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    dr.Road_Condition,
+    dt.Time_Period
+ORDER BY
+    dr.Road_Condition,
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dv.Vehicle_Type,
+    dt.Time_Period,
+    COUNT(*) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Vehicle_Type dv
+    ON fa.Vehicle_Type_Key = dv.Vehicle_Type_Key
+JOIN Dim_Time dt
+    ON fa.Time_Key = dt.Time_Key
+GROUP BY
+    dv.Vehicle_Type,
+    dt.Time_Period
+ORDER BY
+    dv.Vehicle_Type,
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    dv.Vehicle_Type,
+    fa.Traffic_Density,
+    COUNT(*) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Severity_Score,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Severe' THEN 1
+        ELSE 0
+    END) AS Severe_Accidents,
+    SUM(CASE
+        WHEN fa.Accident_Severity = 'Fatal' THEN 1
+        ELSE 0
+    END) AS Fatal_Accidents
+FROM Fact_Accident fa
+JOIN Dim_Vehicle_Type dv
+    ON fa.Vehicle_Type_Key = dv.Vehicle_Type_Key
+GROUP BY
+    dv.Vehicle_Type,
+    fa.Traffic_Density
+ORDER BY
+    dv.Vehicle_Type,
+    CASE fa.Traffic_Density
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    fa.Location,
+    fa.Traffic_Density,
+    fa.Accident_Severity,
+    COUNT(*) AS Accident_Count,
+    ROUND(
+        COUNT(*) * 100.0 /
+        SUM(COUNT(*)) OVER (
+            PARTITION BY fa.Location, fa.Traffic_Density
+        ),
+        2
+    ) AS Percentage_Within_Location_Density,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Casualties), 2) AS Avg_Casualties
+FROM Fact_Accident fa
+GROUP BY
+    fa.Location,
+    fa.Traffic_Density,
+    fa.Accident_Severity
+ORDER BY
+    fa.Location,
+    CASE fa.Traffic_Density
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END,
+    CASE fa.Accident_Severity
+        WHEN 'Minor' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'Severe' THEN 3
+        WHEN 'Fatal' THEN 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    ft.Location,
+    dt.Time_Period,
+
+    COUNT(DISTINCT ft.Traffic_Key) AS Traffic_Observations,
+    SUM(ft.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(ft.Average_Speed), 2) AS Avg_Speed,
+    ROUND(AVG(ft.Congestion_Index), 2) AS Avg_Congestion_Index,
+
+    COUNT(DISTINCT fa.Accident_Key) AS Accident_Count,
+    SUM(fa.Casualties) AS Total_Casualties,
+    ROUND(AVG(fa.Accident_Severity_Score), 2) AS Avg_Accident_Severity
+
+FROM Fact_Traffic ft
+
+JOIN Dim_Time dt
+    ON ft.Time_Key = dt.Time_Key
+
+LEFT JOIN Fact_Accident fa
+    ON ft.Location = fa.Location
+    AND ft.Date_Key = fa.Date_Key
+    AND ft.Time_Key = fa.Time_Key
+
+GROUP BY
+    ft.Location,
+    dt.Time_Period
+
+ORDER BY
+    ft.Location,
+    CASE dt.Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+WITH Traffic_Summary AS (
+    SELECT
+        dt.Peak_Hour,
+        COUNT(*) AS Traffic_Observations
+    FROM Fact_Traffic ft
+    JOIN Dim_Time dt
+        ON ft.Time_Key = dt.Time_Key
+    GROUP BY
+        dt.Peak_Hour
+),
+
+Accident_Summary AS (
+    SELECT
+        dt.Peak_Hour,
+        COUNT(*) AS Accident_Count,
+        SUM(fa.Casualties) AS Total_Casualties,
+
+        SUM(
+            CASE
+                WHEN fa.Accident_Severity = 'Severe'
+                THEN 1
+                ELSE 0
+            END
+        ) AS Severe_Accidents,
+
+        SUM(
+            CASE
+                WHEN fa.Accident_Severity = 'Fatal'
+                THEN 1
+                ELSE 0
+            END
+        ) AS Fatal_Accidents
+
+    FROM Fact_Accident fa
+    JOIN Dim_Time dt
+        ON fa.Time_Key = dt.Time_Key
+    WHERE fa.Date_Key IN (
+        SELECT DISTINCT Date_Key
+        FROM Fact_Traffic
+    )
+    GROUP BY
+        dt.Peak_Hour
+)
+
+SELECT
+    ts.Peak_Hour,
+
+    ts.Traffic_Observations,
+
+    COALESCE(a.Accident_Count, 0) AS Accident_Count,
+
+    COALESCE(a.Total_Casualties, 0) AS Total_Casualties,
+
+    ROUND(
+        COALESCE(a.Accident_Count, 0) * 100.0
+        / ts.Traffic_Observations,
+        2
+    ) AS Accidents_Per_100_Traffic_Observations,
+
+    ROUND(
+        COALESCE(a.Total_Casualties, 0) * 100.0
+        / ts.Traffic_Observations,
+        2
+    ) AS Casualties_Per_100_Traffic_Observations,
+
+    COALESCE(a.Severe_Accidents, 0) AS Severe_Accidents,
+
+    COALESCE(a.Fatal_Accidents, 0) AS Fatal_Accidents,
+
+    ROUND(
+        CASE
+            WHEN COALESCE(a.Accident_Count, 0) > 0
+            THEN (
+                COALESCE(a.Severe_Accidents, 0)
+                + COALESCE(a.Fatal_Accidents, 0)
+            ) * 100.0
+            / a.Accident_Count
+            ELSE 0
+        END,
+        2
+    ) AS Severe_Fatal_Percentage
+
+FROM Traffic_Summary ts
+
+LEFT JOIN Accident_Summary a
+    ON ts.Peak_Hour = a.Peak_Hour
+
+ORDER BY
+    CASE ts.Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+WITH Matched_Accidents AS (
+    SELECT
+        fa.Accident_Key,
+        fa.Location,
+        fa.Date_Key,
+        fa.Time_Key,
+        fa.Weather_Key,
+        fa.Casualties,
+        fa.Accident_Severity,
+
+        dw.Weather_Condition
+
+    FROM Fact_Accident fa
+
+    JOIN Dim_Weather dw
+        ON fa.Weather_Key = dw.Weather_Key
+
+    INNER JOIN Fact_Traffic ft
+        ON fa.Location = ft.Location
+        AND fa.Date_Key = ft.Date_Key
+        AND fa.Time_Key = ft.Time_Key
+
+    GROUP BY
+        fa.Accident_Key,
+        fa.Location,
+        fa.Date_Key,
+        fa.Time_Key,
+        fa.Weather_Key,
+        fa.Casualties,
+        fa.Accident_Severity,
+        dw.Weather_Condition
+),
+
+Traffic_Weather AS (
+    SELECT
+        ft.Location,
+        ft.Date_Key,
+        ft.Time_Key,
+        ft.Congestion_Level,
+        ft.Vehicle_Count,
+        ft.Average_Speed,
+        ft.Congestion_Index
+    FROM Fact_Traffic ft
+)
+
+SELECT
+    ma.Location,
+    ma.Weather_Condition,
+
+    COUNT(DISTINCT ma.Accident_Key) AS Accident_Count,
+
+    SUM(ma.Casualties) AS Total_Casualties,
+
+    ROUND(
+        AVG(
+            CASE ma.Accident_Severity
+                WHEN 'Minor' THEN 1
+                WHEN 'Moderate' THEN 2
+                WHEN 'Severe' THEN 3
+                WHEN 'Fatal' THEN 4
+            END
+        ),
+        2
+    ) AS Avg_Accident_Severity,
+
+    SUM(
+        CASE
+            WHEN ma.Accident_Severity = 'Severe'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Severe_Accidents,
+
+    SUM(
+        CASE
+            WHEN ma.Accident_Severity = 'Fatal'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Fatal_Accidents
+
+FROM Matched_Accidents ma
+
+GROUP BY
+    ma.Location,
+    ma.Weather_Condition
+
+ORDER BY
+    ma.Location,
+    Accident_Count DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    'Traffic' AS KPI_Category,
+    'Total Traffic Observations' AS KPI_Name,
+    COUNT(*) AS KPI_Value
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Traffic',
+    'Total Vehicles',
+    SUM(Vehicle_Count)
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Traffic',
+    'Average Vehicle Count',
+    ROUND(AVG(Vehicle_Count), 2)
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Traffic',
+    'Average Speed',
+    ROUND(AVG(Average_Speed), 2)
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Traffic',
+    'Average Congestion Index',
+    ROUND(AVG(Congestion_Index), 2)
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Traffic',
+    'High Congestion Observations',
+    SUM(
+        CASE
+            WHEN Congestion_Level = 'High'
+            THEN 1
+            ELSE 0
+        END
+    )
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Total Accidents',
+    COUNT(*)
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Total Casualties',
+    SUM(Casualties)
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Average Casualties per Accident',
+    ROUND(AVG(Casualties), 2)
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Average Vehicles per Accident',
+    ROUND(AVG(Number_of_Vehicles), 2)
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Severe Accidents',
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Severe'
+            THEN 1
+            ELSE 0
+        END
+    )
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Fatal Accidents',
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Fatal'
+            THEN 1
+            ELSE 0
+        END
+    )
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Severe + Fatal Accidents',
+    SUM(
+        CASE
+            WHEN Accident_Severity IN ('Severe', 'Fatal')
+            THEN 1
+            ELSE 0
+        END
+    )
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'Accident',
+    'Severe + Fatal Percentage',
+    ROUND(
+        SUM(
+            CASE
+                WHEN Accident_Severity IN ('Severe', 'Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    )
+FROM Fact_Accident;
+--------------------------------------------------------------------------------------------------
+
+USE smart_city_traffic_dw;
+
+CREATE OR REPLACE VIEW vw_traffic_analysis AS
+SELECT
+    ft.Traffic_Key,
+    ft.Sensor_ID,
+
+    dd.Full_Date,
+    dd.Day,
+    dd.Day_Name,
+    dd.Week,
+    dd.Month,
+    dd.Month_Name,
+    dd.Quarter,
+    dd.Year,
+    dd.Is_Weekend,
+
+    dt.Time,
+    dt.Hour,
+    dt.Hour_Label,
+    dt.Time_Period,
+    dt.Peak_Hour,
+
+    ft.Location,
+    ft.Vehicle_Count,
+    ft.Average_Speed,
+    ft.Congestion_Level,
+    ft.Congestion_Index,
+    ft.Congestion_Category,
+
+    ft.Date_Time
+
+FROM Fact_Traffic ft
+
+INNER JOIN Dim_Date dd
+    ON ft.Date_Key = dd.Date_Key
+
+INNER JOIN Dim_Time dt
+    ON ft.Time_Key = dt.Time_Key;
+
+
+-- Verify the view
+SELECT
+    COUNT(*) AS Total_Records,
+    COUNT(DISTINCT Sensor_ID) AS Unique_Sensors,
+    COUNT(DISTINCT Location) AS Locations,
+    MIN(Full_Date) AS Start_Date,
+    MAX(Full_Date) AS End_Date,
+    ROUND(SUM(Vehicle_Count), 2) AS Total_Vehicles,
+    ROUND(AVG(Average_Speed), 2) AS Average_Speed,
+    ROUND(AVG(Congestion_Index), 2) AS Average_Congestion_Index
+FROM vw_traffic_analysis;
+--------------------------------------------------------------------------------------------------
+-- ============================================================
+-- STEP 115: MATCHED TRAFFIC–ACCIDENT ANALYSIS VIEW
+-- ============================================================
+
+USE smart_city_traffic_dw;
+
+CREATE OR REPLACE VIEW vw_traffic_accident_analysis AS
+SELECT
+    t.Full_Date,
+    t.Day_Name,
+    t.Month,
+    t.Month_Name,
+    t.Year,
+    t.Is_Weekend,
+
+    t.Hour,
+    t.Hour_Label,
+    t.Time_Period,
+    t.Peak_Hour,
+
+    t.Location,
+
+    t.Vehicle_Count,
+    t.Average_Speed,
+    t.Congestion_Level,
+    t.Congestion_Index,
+    t.Congestion_Category,
+
+    COUNT(a.Accident_Key) AS Accident_Count,
+    COALESCE(SUM(a.Casualties), 0) AS Total_Casualties,
+    COALESCE(
+        AVG(a.Accident_Severity_Score),
+        NULL
+    ) AS Average_Accident_Severity,
+
+    COALESCE(
+        SUM(
+            CASE
+                WHEN a.Accident_Severity IN ('Severe', 'Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ),
+        0
+    ) AS Severe_Fatal_Accidents
+
+FROM vw_traffic_analysis t
+
+LEFT JOIN vw_accident_analysis a
+    ON t.Full_Date = a.Full_Date
+    AND t.Hour = a.Hour
+    AND t.Location = a.Location
+
+GROUP BY
+    t.Full_Date,
+    t.Day_Name,
+    t.Month,
+    t.Month_Name,
+    t.Year,
+    t.Is_Weekend,
+    t.Hour,
+    t.Hour_Label,
+    t.Time_Period,
+    t.Peak_Hour,
+    t.Location,
+    t.Vehicle_Count,
+    t.Average_Speed,
+    t.Congestion_Level,
+    t.Congestion_Index,
+    t.Congestion_Category;
+
+
+-- Verify matched analysis
+SELECT
+    COUNT(*) AS Traffic_Observations,
+    SUM(Accident_Count) AS Matched_Accidents,
+    SUM(Total_Casualties) AS Matched_Casualties,
+    ROUND(AVG(Congestion_Index), 2) AS Average_Congestion_Index,
+    ROUND(AVG(Average_Speed), 2) AS Average_Speed
+FROM vw_traffic_accident_analysis;
+--------------------------------------------------------------------------------------------------
+-- ============================================================
+-- STEP 121: MONTHLY ACCIDENT TREND
+-- ============================================================
+
+USE smart_city_traffic_dw;
+
+SELECT
+    Year,
+    Month,
+    Month_Name,
+
+    COUNT(*) AS Total_Accidents,
+
+    SUM(Casualties) AS Total_Casualties,
+
+    ROUND(
+        AVG(Casualties),
+        2
+    ) AS Average_Casualties,
+
+    ROUND(
+        AVG(Accident_Severity_Score),
+        2
+    ) AS Average_Severity_Score,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Severe'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Severe_Accidents,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Fatal'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Fatal_Accidents
+
+FROM vw_accident_analysis
+
+GROUP BY
+    Year,
+    Month,
+    Month_Name
+
+ORDER BY
+    Year,
+    Month;
+--------------------------------------------------------------------------------------------------
+
+USE smart_city_traffic_dw;
+
+SELECT
+    Location,
+    Hour,
+
+    COUNT(*) AS Traffic_Observations,
+
+    SUM(Vehicle_Count) AS Total_Vehicles,
+
+    ROUND(
+        AVG(Vehicle_Count),
+        2
+    ) AS Average_Vehicle_Count,
+
+    ROUND(
+        AVG(Average_Speed),
+        2
+    ) AS Average_Speed,
+
+    ROUND(
+        AVG(Congestion_Index),
+        2
+    ) AS Average_Congestion_Index,
+
+    SUM(
+        CASE
+            WHEN Congestion_Level = 'High'
+            THEN 1
+            ELSE 0
+        END
+    ) AS High_Congestion_Observations,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN Congestion_Level = 'High'
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    ) AS High_Congestion_Percentage
+
+FROM vw_traffic_analysis
+
+GROUP BY
+    Location,
+    Hour
+
+ORDER BY
+    Location,
+    Hour;
+--------------------------------------------------------------------------------------------------
+
+
+USE smart_city_traffic_dw;
+
+SELECT
+    Year,
+    Week,
+
+    COUNT(*) AS Traffic_Observations,
+
+    SUM(Vehicle_Count) AS Total_Vehicles,
+
+    ROUND(
+        AVG(Vehicle_Count),
+        2
+    ) AS Average_Vehicle_Count,
+
+    ROUND(
+        AVG(Average_Speed),
+        2
+    ) AS Average_Speed,
+
+    ROUND(
+        AVG(Congestion_Index),
+        2
+    ) AS Average_Congestion_Index,
+
+    SUM(
+        CASE
+            WHEN Congestion_Level = 'High'
+            THEN 1
+            ELSE 0
+        END
+    ) AS High_Congestion_Observations,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN Congestion_Level = 'High'
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    ) AS High_Congestion_Percentage
+
+FROM vw_traffic_analysis
+
+GROUP BY
+    Year,
+    Week
+
+ORDER BY
+    Year,
+    Week;
+--------------------------------------------------------------------------------------------------
+
+
+USE smart_city_traffic_dw;
+
+SELECT
+    CASE
+        WHEN Is_Weekend = 1 THEN 'Weekend'
+        ELSE 'Weekday'
+    END AS Day_Type,
+
+    COUNT(*) AS Traffic_Observations,
+
+    SUM(Vehicle_Count) AS Total_Vehicles,
+
+    ROUND(
+        AVG(Vehicle_Count),
+        2
+    ) AS Average_Vehicle_Count,
+
+    ROUND(
+        AVG(Average_Speed),
+        2
+    ) AS Average_Speed,
+
+    ROUND(
+        AVG(Congestion_Index),
+        2
+    ) AS Average_Congestion_Index,
+
+    SUM(
+        CASE
+            WHEN Congestion_Level = 'High'
+            THEN 1
+            ELSE 0
+        END
+    ) AS High_Congestion_Observations,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN Congestion_Level = 'High'
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    ) AS High_Congestion_Percentage
+
+FROM vw_traffic_analysis
+
+GROUP BY
+    Is_Weekend
+
+ORDER BY
+    Is_Weekend;
+--------------------------------------------------------------------------------------------------
+
+
+USE smart_city_traffic_dw;
+
+SELECT
+    Location,
+    Year,
+    Month,
+    Month_Name,
+
+    COUNT(*) AS Total_Accidents,
+
+    SUM(Casualties) AS Total_Casualties,
+
+    ROUND(
+        AVG(Casualties),
+        2
+    ) AS Average_Casualties,
+
+    ROUND(
+        AVG(Accident_Severity_Score),
+        2
+    ) AS Average_Severity_Score,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Severe'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Severe_Accidents,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Fatal'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Fatal_Accidents,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN Accident_Severity IN ('Severe','Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    ) AS Severe_Fatal_Percentage
+
+FROM vw_accident_analysis
+
+GROUP BY
+    Location,
+    Year,
+    Month,
+    Month_Name
+
+ORDER BY
+    Location,
+    Year,
+    Month;
+--------------------------------------------------------------------------------------------------
+
+
+USE smart_city_traffic_dw;
+
+SELECT
+    Traffic_Density,
+    Time_Period,
+
+    COUNT(*) AS Total_Accidents,
+
+    SUM(Casualties) AS Total_Casualties,
+
+    ROUND(
+        AVG(Casualties),
+        2
+    ) AS Average_Casualties,
+
+    ROUND(
+        AVG(Accident_Severity_Score),
+        2
+    ) AS Average_Severity_Score,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Severe'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Severe_Accidents,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Fatal'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Fatal_Accidents,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN Accident_Severity IN ('Severe','Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    ) AS Severe_Fatal_Percentage
+
+FROM vw_accident_analysis
+
+GROUP BY
+    Traffic_Density,
+    Time_Period
+
+ORDER BY
+    CASE Traffic_Density
+        WHEN 'Low' THEN 1
+        WHEN 'Moderate' THEN 2
+        WHEN 'High' THEN 3
+    END,
+    CASE Time_Period
+        WHEN 'Night' THEN 1
+        WHEN 'Morning' THEN 2
+        WHEN 'Afternoon' THEN 3
+        WHEN 'Evening' THEN 4
+        WHEN 'Late Evening' THEN 5
+    END;
+--------------------------------------------------------------------------------------------------
+
+USE smart_city_traffic_dw;
+
+SELECT
+    Peak_Hour,
+
+    COUNT(*) AS Total_Accidents,
+
+    SUM(Casualties) AS Total_Casualties,
+
+    ROUND(
+        AVG(Casualties),
+        2
+    ) AS Average_Casualties,
+
+    ROUND(
+        AVG(Accident_Severity_Score),
+        2
+    ) AS Average_Severity_Score,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Severe'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Severe_Accidents,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity = 'Fatal'
+            THEN 1
+            ELSE 0
+        END
+    ) AS Fatal_Accidents,
+
+    SUM(
+        CASE
+            WHEN Accident_Severity IN ('Severe','Fatal')
+            THEN 1
+            ELSE 0
+        END
+    ) AS Severe_Fatal_Accidents,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN Accident_Severity IN ('Severe','Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(*),
+        2
+    ) AS Severe_Fatal_Percentage
+
+FROM vw_accident_analysis
+
+GROUP BY
+    Peak_Hour
+
+ORDER BY
+    CASE Peak_Hour
+        WHEN 'Peak' THEN 1
+        WHEN 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    t.Location,
+    dt.Peak_Hour,
+
+    COUNT(DISTINCT t.Traffic_Key) AS Traffic_Observations,
+    SUM(t.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(t.Vehicle_Count),2) AS Average_Vehicles,
+    ROUND(AVG(t.Average_Speed),2) AS Average_Speed,
+    ROUND(AVG(t.Congestion_Index),2) AS Average_Congestion_Index,
+
+    COUNT(DISTINCT a.Accident_ID) AS Matched_Accidents,
+    COALESCE(SUM(a.Casualties),0) AS Matched_Casualties,
+
+    ROUND(
+        COUNT(DISTINCT a.Accident_ID) * 100.0
+        / COUNT(DISTINCT t.Traffic_Key),
+        2
+    ) AS Accident_Rate_Per_100_Traffic_Observations,
+
+    COALESCE(
+        SUM(
+            CASE
+                WHEN a.Accident_Severity IN ('Severe','Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ),
+        0
+    ) AS Severe_Fatal_Accidents
+
+FROM Fact_Traffic t
+
+INNER JOIN Dim_Time dt
+    ON t.Time_Key = dt.Time_Key
+
+LEFT JOIN Fact_Accident a
+    ON t.Location = a.Location
+    AND t.Date_Key = a.Date_Key
+    AND t.Time_Key = a.Time_Key
+
+GROUP BY
+    t.Location,
+    dt.Peak_Hour
+
+ORDER BY
+    t.Location,
+    CASE
+        WHEN dt.Peak_Hour = 'Peak' THEN 1
+        WHEN dt.Peak_Hour = 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    t.Location,
+    a.Traffic_Density,
+
+    COUNT(DISTINCT t.Traffic_Key) AS Traffic_Observations,
+
+    SUM(DISTINCT t.Traffic_Key * 0 + t.Vehicle_Count) AS Total_Vehicles,
+
+    ROUND(AVG(t.Vehicle_Count),2) AS Average_Vehicles,
+    ROUND(AVG(t.Average_Speed),2) AS Average_Speed,
+    ROUND(AVG(t.Congestion_Index),2) AS Average_Congestion_Index,
+
+    COUNT(DISTINCT a.Accident_ID) AS Matched_Accidents,
+
+    COALESCE(
+        SUM(a.Casualties),
+        0
+    ) AS Matched_Casualties,
+
+    ROUND(
+        COUNT(DISTINCT a.Accident_ID) * 100.0
+        / COUNT(DISTINCT t.Traffic_Key),
+        2
+    ) AS Accident_Rate_Per_100_Traffic_Observations,
+
+    COALESCE(
+        SUM(
+            CASE
+                WHEN a.Accident_Severity IN ('Severe','Fatal')
+                THEN 1
+                ELSE 0
+            END
+        ),
+        0
+    ) AS Severe_Fatal_Accidents
+
+FROM Fact_Traffic t
+
+LEFT JOIN Fact_Accident a
+    ON t.Location = a.Location
+    AND t.Date_Key = a.Date_Key
+    AND t.Time_Key = a.Time_Key
+
+GROUP BY
+    t.Location,
+    a.Traffic_Density
+
+ORDER BY
+    t.Location,
+    CASE
+        WHEN a.Traffic_Density = 'Low' THEN 1
+        WHEN a.Traffic_Density = 'Moderate' THEN 2
+        WHEN a.Traffic_Density = 'High' THEN 3
+        ELSE 4
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    t.Location,
+    dt.Peak_Hour,
+
+    COUNT(DISTINCT t.Traffic_Key) AS Traffic_Observations,
+    SUM(t.Vehicle_Count) AS Total_Vehicles,
+    ROUND(AVG(t.Vehicle_Count),2) AS Average_Vehicles,
+    ROUND(AVG(t.Average_Speed),2) AS Average_Speed,
+    ROUND(AVG(t.Congestion_Index),2) AS Average_Congestion_Index,
+
+    SUM(
+        CASE
+            WHEN t.Congestion_Level = 'High'
+            THEN 1
+            ELSE 0
+        END
+    ) AS High_Congestion_Observations,
+
+    ROUND(
+        SUM(
+            CASE
+                WHEN t.Congestion_Level = 'High'
+                THEN 1
+                ELSE 0
+            END
+        ) * 100.0 / COUNT(DISTINCT t.Traffic_Key),
+        2
+    ) AS High_Congestion_Percentage
+
+FROM Fact_Traffic t
+INNER JOIN Dim_Time dt
+    ON t.Time_Key = dt.Time_Key
+
+GROUP BY
+    t.Location,
+    dt.Peak_Hour
+
+ORDER BY
+    t.Location,
+    CASE
+        WHEN dt.Peak_Hour = 'Peak' THEN 1
+        WHEN dt.Peak_Hour = 'Non-Peak' THEN 2
+    END;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+WITH Traffic_Profile AS (
+    SELECT
+        t.Location,
+        COUNT(DISTINCT t.Traffic_Key) AS Traffic_Observations,
+        SUM(t.Vehicle_Count) AS Total_Vehicles,
+        ROUND(AVG(t.Vehicle_Count),2) AS Average_Vehicles,
+        ROUND(AVG(t.Average_Speed),2) AS Average_Speed,
+        ROUND(AVG(t.Congestion_Index),2) AS Average_Congestion_Index,
+        ROUND(
+            SUM(
+                CASE
+                    WHEN t.Congestion_Level = 'High'
+                    THEN 1
+                    ELSE 0
+                END
+            ) * 100.0 / COUNT(DISTINCT t.Traffic_Key),
+            2
+        ) AS High_Congestion_Percentage
+    FROM Fact_Traffic t
+    GROUP BY t.Location
+),
+
+Accident_Profile AS (
+    SELECT
+        t.Location,
+        COUNT(DISTINCT a.Accident_ID) AS Matched_Accidents,
+        COALESCE(SUM(a.Casualties),0) AS Matched_Casualties,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN a.Accident_Severity IN ('Severe','Fatal')
+                    THEN 1
+                    ELSE 0
+                END
+            ),0
+        ) AS Severe_Fatal_Accidents
+    FROM Fact_Traffic t
+    INNER JOIN Fact_Accident a
+        ON t.Location = a.Location
+        AND t.Date_Key = a.Date_Key
+        AND t.Time_Key = a.Time_Key
+    GROUP BY t.Location
+)
+
+SELECT
+    tp.Location,
+    tp.Traffic_Observations,
+    tp.Total_Vehicles,
+    tp.Average_Vehicles,
+    tp.Average_Speed,
+    tp.Average_Congestion_Index,
+    tp.High_Congestion_Percentage,
+
+    COALESCE(ap.Matched_Accidents,0) AS Matched_Accidents,
+    COALESCE(ap.Matched_Casualties,0) AS Matched_Casualties,
+    COALESCE(ap.Severe_Fatal_Accidents,0) AS Severe_Fatal_Accidents,
+
+    COALESCE(
+        ROUND(
+            ap.Matched_Accidents * 100.0
+            / NULLIF(tp.Traffic_Observations,0),
+            2
+        ),
+        0
+    ) AS Matched_Accidents_Per_100_Traffic_Observations,
+
+    COALESCE(
+        ROUND(
+            ap.Severe_Fatal_Accidents * 100.0
+            / NULLIF(ap.Matched_Accidents,0),
+            2
+        ),
+        0
+    ) AS Severe_Fatal_Percentage
+
+FROM Traffic_Profile tp
+LEFT JOIN Accident_Profile ap
+    ON tp.Location = ap.Location
+
+ORDER BY
+    Matched_Accidents_Per_100_Traffic_Observations DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+WITH Traffic_Profile AS (
+    SELECT
+        t.Location,
+        COUNT(DISTINCT t.Traffic_Key) AS Traffic_Observations,
+        SUM(t.Vehicle_Count) AS Total_Vehicles,
+        ROUND(AVG(t.Vehicle_Count),2) AS Average_Vehicles,
+        ROUND(AVG(t.Average_Speed),2) AS Average_Speed,
+        ROUND(AVG(t.Congestion_Index),2) AS Average_Congestion_Index,
+        ROUND(
+            SUM(
+                CASE
+                    WHEN t.Congestion_Level = 'High'
+                    THEN 1
+                    ELSE 0
+                END
+            ) * 100.0 / COUNT(DISTINCT t.Traffic_Key),
+            2
+        ) AS High_Congestion_Percentage
+    FROM Fact_Traffic t
+    GROUP BY t.Location
+),
+
+Accident_Profile AS (
+    SELECT
+        t.Location,
+        COUNT(DISTINCT a.Accident_ID) AS Matched_Accidents,
+        COALESCE(SUM(a.Casualties),0) AS Matched_Casualties,
+        COALESCE(
+            SUM(
+                CASE
+                    WHEN a.Accident_Severity IN ('Severe','Fatal')
+                    THEN 1
+                    ELSE 0
+                END
+            ),0
+        ) AS Severe_Fatal_Accidents
+    FROM Fact_Traffic t
+    INNER JOIN Fact_Accident a
+        ON t.Location = a.Location
+        AND t.Date_Key = a.Date_Key
+        AND t.Time_Key = a.Time_Key
+    GROUP BY t.Location
+)
+
+SELECT
+    tp.Location,
+    tp.Traffic_Observations,
+    tp.Total_Vehicles,
+    tp.Average_Vehicles,
+    tp.Average_Speed,
+    tp.Average_Congestion_Index,
+    tp.High_Congestion_Percentage,
+
+    COALESCE(ap.Matched_Accidents,0) AS Matched_Accidents,
+    COALESCE(ap.Matched_Casualties,0) AS Matched_Casualties,
+    COALESCE(ap.Severe_Fatal_Accidents,0) AS Severe_Fatal_Accidents,
+
+    COALESCE(
+        ROUND(
+            ap.Matched_Accidents * 100.0
+            / NULLIF(tp.Traffic_Observations,0),
+            2
+        ),
+        0
+    ) AS Matched_Accidents_Per_100_Traffic_Observations,
+
+    COALESCE(
+        ROUND(
+            ap.Severe_Fatal_Accidents * 100.0
+            / NULLIF(ap.Matched_Accidents,0),
+            2
+        ),
+        0
+    ) AS Severe_Fatal_Percentage
+
+FROM Traffic_Profile tp
+LEFT JOIN Accident_Profile ap
+    ON tp.Location = ap.Location
+
+ORDER BY
+    Matched_Accidents_Per_100_Traffic_Observations DESC;
+--------------------------------------------------------------------------------------------------
+USE smart_city_traffic_dw;
+
+SELECT
+    'Dim_Date' AS Table_Name,
+    COUNT(*) AS Row_Count
+FROM Dim_Date
+
+UNION ALL
+
+SELECT
+    'Dim_Time',
+    COUNT(*)
+FROM Dim_Time
+
+UNION ALL
+
+SELECT
+    'Dim_Weather',
+    COUNT(*)
+FROM Dim_Weather
+
+UNION ALL
+
+SELECT
+    'Dim_Road_Condition',
+    COUNT(*)
+FROM Dim_Road_Condition
+
+UNION ALL
+
+SELECT
+    'Dim_Vehicle_Type',
+    COUNT(*)
+FROM Dim_Vehicle_Type
+
+UNION ALL
+
+SELECT
+    'Fact_Traffic',
+    COUNT(*)
+FROM Fact_Traffic
+
+UNION ALL
+
+SELECT
+    'Fact_Accident',
+    COUNT(*)
+FROM Fact_Accident
+
+UNION ALL
+
+SELECT
+    'vw_traffic_analysis',
+    COUNT(*)
+FROM vw_traffic_analysis
+
+UNION ALL
+
+SELECT
+    'vw_accident_analysis',
+    COUNT(*)
+FROM vw_accident_analysis
+
+UNION ALL
+
+SELECT
+    'vw_traffic_powerbi_summary',
+    COUNT(*)
+FROM vw_traffic_powerbi_summary
+
+UNION ALL
+
+SELECT
+    'vw_accident_powerbi_summary',
+    COUNT(*)
+FROM vw_accident_powerbi_summary;
