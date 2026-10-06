@@ -1,0 +1,146 @@
+Average Casualties = 
+AVERAGE ( 'smart_city_traffic_dw fact_accident'[Casualties] )
+-----------------------------------------------------------------------------------------------------------------
+Average Casualties - Fatal = 
+CALCULATE (
+    [Average Casualties],
+    'smart_city_traffic_dw fact_accident'[Accident_Severity] = "Fatal"
+)
+-----------------------------------------------------------------------------------------------------------------
+Average Casualties - Severe = 
+CALCULATE (
+    [Average Casualties],
+    'smart_city_traffic_dw fact_accident'[Accident_Severity] = "Severe"
+)
+-----------------------------------------------------------------------------------------------------------------
+Average Casualties - Severe Fatal = 
+CALCULATE (
+    [Average Casualties],
+    'smart_city_traffic_dw fact_accident'[Accident_Severity]
+        IN { "Severe", "Fatal" }
+)
+-----------------------------------------------------------------------------------------------------------------
+Average Congestion Index = 
+AVERAGE ( 'smart_city_traffic_dw fact_traffic'[Congestion_Index] )
+-----------------------------------------------------------------------------------------------------------------
+Average Speed = 
+AVERAGE ( 'smart_city_traffic_dw fact_traffic'[Average_Speed] )
+-----------------------------------------------------------------------------------------------------------------
+Average Vehicles = 
+AVERAGE ( 'smart_city_traffic_dw fact_traffic'[Vehicle_Count] )
+-----------------------------------------------------------------------------------------------------------------
+Average Vehicles per Accident = 
+AVERAGE ( 'smart_city_traffic_dw fact_accident'[Number_of_Vehicles] )
+-----------------------------------------------------------------------------------------------------------------
+Casualties per Accident = 
+DIVIDE (
+    [Total Casualties],
+    [Total Accidents],
+    0
+)
+-----------------------------------------------------------------------------------------------------------------
+Fatal Accidents = 
+CALCULATE (
+    COUNTROWS ( 'smart_city_traffic_dw fact_accident' ),
+    'smart_city_traffic_dw fact_accident'[Accident_Severity] = "Fatal"
+)
+-----------------------------------------------------------------------------------------------------------------
+High Congestion % = 
+DIVIDE (
+    [High Congestion Count],
+    [Total Traffic Observations],
+    0
+)
+-----------------------------------------------------------------------------------------------------------------
+High Congestion Count = 
+CALCULATE (
+    COUNTROWS ( 'smart_city_traffic_dw fact_traffic' ),
+    'smart_city_traffic_dw fact_traffic'[Congestion_Level] = "High"
+)
+-----------------------------------------------------------------------------------------------------------------
+High Density Accidents = 
+CALCULATE (
+    COUNTROWS ( 'smart_city_traffic_dw fact_accident' ),
+    'smart_city_traffic_dw fact_accident'[Traffic_Density] = "High"
+)
+-----------------------------------------------------------------------------------------------------------------
+High Severity Accident % = 
+DIVIDE (
+    [Severe Fatal Accidents],
+    [Total Accidents],
+    0
+)
+-----------------------------------------------------------------------------------------------------------------
+Higher Risk % = 
+DIVIDE(
+    CALCULATE(
+        COUNTROWS('Accident_Risk_Predictions'),
+        'Accident_Risk_Predictions'[Risk_Band] = "Higher"
+    ),
+    COUNTROWS('Accident_Risk_Predictions'),
+    0
+)
+-----------------------------------------------------------------------------------------------------------------
+Peak Hour Accident % = 
+DIVIDE (
+    [Peak Hour Accidents],
+    [Total Accidents],
+    0
+)
+-----------------------------------------------------------------------------------------------------------------
+Peak Hour Accidents = 
+CALCULATE (
+    COUNTROWS ( 'smart_city_traffic_dw fact_accident' ),
+    'smart_city_traffic_dw fact_accident'[Time_Key]
+        IN VALUES ( 'smart_city_traffic_dw dim_time'[Time_Key] ),
+    'smart_city_traffic_dw dim_time'[Peak_Hour] = "Peak"
+)
+-----------------------------------------------------------------------------------------------------------------
+Peak Hour Average Congestion = 
+CALCULATE (
+    [Average Congestion Index],
+    'smart_city_traffic_dw dim_time'[Peak_Hour] = "Peak"
+)
+-----------------------------------------------------------------------------------------------------------------
+Peak Hour Average Speed = 
+CALCULATE (
+    [Average Speed],
+    'smart_city_traffic_dw dim_time'[Peak_Hour] = "Peak"
+)
+-----------------------------------------------------------------------------------------------------------------
+Peak vs Non-Peak Speed Difference = 
+[Peak Hour Average Speed]
+    - CALCULATE (
+        [Average Speed],
+        'smart_city_traffic_dw dim_time'[Peak_Hour] = "Non-Peak"
+    )
+-----------------------------------------------------------------------------------------------------------------
+Severe Accidents = 
+CALCULATE (
+    COUNTROWS ( 'smart_city_traffic_dw fact_accident' ),
+    'smart_city_traffic_dw fact_accident'[Accident_Severity] = "Severe"
+)
+-----------------------------------------------------------------------------------------------------------------
+Severe Fatal Accident % = 
+DIVIDE (
+    [Severe Fatal Accidents],
+    [Total Accidents],
+    0
+)
+-----------------------------------------------------------------------------------------------------------------
+Severe Fatal Accidents = 
+[Severe Accidents] + [Fatal Accidents]
+-----------------------------------------------------------------------------------------------------------------
+Total Accidents = 
+COUNTROWS ( 'smart_city_traffic_dw fact_accident' )
+-----------------------------------------------------------------------------------------------------------------
+Total Casualties = 
+SUM ( 'smart_city_traffic_dw fact_accident'[Casualties] )
+-----------------------------------------------------------------------------------------------------------------
+Total Traffic Observations = 
+COUNTROWS ( 'smart_city_traffic_dw fact_traffic' )
+-----------------------------------------------------------------------------------------------------------------
+Total Vehicles = 
+SUM ( 'smart_city_traffic_dw fact_traffic'[Vehicle_Count] )
+
+-----------------------------------------------------------------------------------------------------------------
